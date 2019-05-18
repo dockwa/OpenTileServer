@@ -139,26 +139,20 @@ function enable_osm_updates(){
 	#2. Generating state.txt
 	if [ ! -f ${WORKDIR_OSM}/state.txt ]; then
 		#NOTE: If you want hourly updates set stream=hourly
-    STATE_URL="https://replicate-sequences.osm.mazdermind.de/?$(date -u +"%Y-%m-%dT%TZ")&stream=day"
+    STATE_URL="https://planet.openstreetmap.org/replication/hour/state.txt"
 		wget --no-check-certificate -O${WORKDIR_OSM}/state.txt ${STATE_URL}
 	fi
  
-	#3. Fix configuration.txt
-	#Get the URL from http://download.geofabrik.de/europe/germany.html
-	#example PBF_URL='http://download.geofabrik.de/europe/germany-latest.osm.pbf'
-	UPDATE_URL="$(echo ${PBF_URL} | sed 's/latest.osm.pbf/updates/')"
-	sed -i.save "s|#\?baseUrl=.*|baseUrl=${UPDATE_URL}|" ${WORKDIR_OSM}/configuration.txt
- 
 	#4. Add step 4 to cron, to make it run every day
-	if [ ! -f /etc/cron.daily/osm_update ]; then
-		cat >/etc/cron.daily/osm_update <<CMD_EOF
+	if [ ! -f /etc/cron.hourly/osm_update ]; then
+		cat >/etc/cron.hourly/osm_update <<CMD_EOF
 #!/bin/bash
 export WORKDIR_OSM=/home/${OSM_USER}/.osmosis
 export PGPASSWORD="${OSM_PG_PASS}"
 osmosis --read-replication-interval workingDirectory=${WORKDIR_OSM} --simplify-change --write-xml-change /tmp/changes.osc.gz
 sudo -u postgres osm2pgsql --append ${osm2pgsql_OPTS} /tmp/changes.osc.gz
 CMD_EOF
-		chmod +x /etc/cron.daily/osm_update
+		chmod +x /etc/cron.hourly/osm_update
 	fi
 }
  
@@ -426,7 +420,7 @@ function load_data(){
 	fi
  
 	#get available memory just before we call osm2pgsql!
-	let C_MEM=$(free -m | grep -i 'mem:' | sed 's/[ \t]\+/ /g' | cut -f7 -d' ')-200
+	let C_MEM=$(free -m | grep -i 'mem:' | sed 's/[ \t]\+/ /g' | cut -f7 -d' ')-4096
 	sudo -u ${OSM_USER} osm2pgsql ${osm2pgsql_OPTS} -C ${C_MEM} ${PBF_FILE}
  
 	if [ $? -eq 0 ]; then	#If import went good
